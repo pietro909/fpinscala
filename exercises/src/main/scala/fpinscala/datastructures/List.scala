@@ -43,26 +43,68 @@ object List { // `List` companion object. Contains functions for creating and wo
       case Cons(x, xs) => f(x, foldRight(xs, z)(f))
     }
 
-  def sum2(ns: List[Int]) =
+  def sumFR(ns: List[Int]) =
     foldRight(ns, 0)((x,y) => x + y)
 
-  def product2(ns: List[Double]) =
+  /* Can't be short-circuited */
+  def productFR(ns: List[Double]) =
     foldRight(ns, 1.0)(_ * _) // `_ * _` is more concise notation for `(x,y) => x * y`; see sidebar
 
 
-  def tail[A](l: List[A]): List[A] = sys.error("todo")
+  def tail[A](l: List[A]): List[A] =
+    l match {
+      case Nil => Nil
+      case Cons(head, tail) => tail
+    }
 
-  def setHead[A](l: List[A], h: A): List[A] = sys.error("todo")
+  def setHead[A](l: List[A], h: A): List[A] =
+    l match {
+      case Nil => Cons(h, Nil)
+      case Cons(head, tail) => Cons(h, tail)
+    }
 
-  def drop[A](l: List[A], n: Int): List[A] = sys.error("todo")
+  def drop[A](l: List[A], n: Int): List[A] =
+    n match {
+      case 0 => l
+      case _ => drop(tail(l), n-1)
+    }
 
-  def dropWhile[A](l: List[A], f: A => Boolean): List[A] = sys.error("todo")
+  def dropWhile[A](l: List[A], f: A => Boolean): List[A] =
+    l match {
+      case Nil => Nil
+      case Cons(head, tail) if (f(head)) => dropWhile(tail, f)
+      case _ => l
+    }
 
-  def init[A](l: List[A]): List[A] = sys.error("todo")
+  def init[A](l: List[A]): List[A] =
+    l match {
+      case Nil => Nil
+      case Cons(head, Cons(head2, tail)) => Cons(head, Cons(head2, init(tail)))
+      case Cons(head, _) => Nil
+    }
 
-  def length[A](l: List[A]): Int = sys.error("todo")
+  def length[A](l: List[A]): Int =
+    foldRight[A, Int](l, 0)((_, n) => n + 1)
 
-  def foldLeft[A,B](l: List[A], z: B)(f: (B, A) => B): B = sys.error("todo")
+  def foldLeft[A,B](l: List[A], z: B)(f: (B, A) => B): B =
+    l match {
+      case Nil => z
+      case Cons(head, tail) => foldLeft(tail, f(z, head))(f)
+    }
+
+  def sumFL(l: List[Int]): Int =
+    foldLeft(l, 0)(_ + _)
+
+  def productFL(l: List[Double]): Double =
+    foldLeft(l, 1.0)(_ * _)
+
+  def lengthFL[A](l: List[A]): Int =
+   foldLeft(l, 0)((n, _) => n + 1)
+
+  def reverse[A](l: List[A]): List[A] =
+    foldLeft[A, List[A]](l, Nil)((b, a) => Cons(a, b))
+
+  // TODO: implement foldLeft in terms of foldRight, page 62)
 
   def map[A,B](l: List[A])(f: A => B): List[B] = sys.error("todo")
 }
