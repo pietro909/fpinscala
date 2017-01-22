@@ -1,18 +1,31 @@
 package fpinscala.errorhandling
 
 
-import scala.{Option => _, Some => _, Either => _, _} // hide std library `Option`, `Some` and `Either`, since we are writing our own in this chapter
+import scala.{Option => _, Some => _, Either => _, _}
+// hide std library `Option`, `Some` and `Either`, since we are writing our own in this chapter
 
 sealed trait Option[+A] {
-  def map[B](f: A => B): Option[B] = sys.error("todo")
 
-  def getOrElse[B>:A](default: => B): B = sys.error("todo")
+  def map[B](f: A => B): Option[B] =
+    this match {
+      case None => None
+      case Some(value) => Some(f(value))
+    }
 
-  def flatMap[B](f: A => Option[B]): Option[B] = sys.error("todo")
+  def getOrElse[B>:A](default: => B): B =
+    this match {
+      case Some(value) => value
+      case None => default
+    }
 
-  def orElse[B>:A](ob: => Option[B]): Option[B] = sys.error("todo")
+  def flatMap[B](f: A => Option[B]): Option[B] =
+    map(f) getOrElse None
 
-  def filter(f: A => Boolean): Option[A] = sys.error("todo")
+  def orElse[B>:A](ob: => Option[B]): Option[B] =
+    flatMap(_ => ob)
+
+  def filter(f: A => Boolean): Option[A] =
+    if (map(f) getOrElse false) this else None
 }
 case class Some[+A](get: A) extends Option[A]
 case object None extends Option[Nothing]
@@ -38,11 +51,53 @@ object Option {
   def mean(xs: Seq[Double]): Option[Double] =
     if (xs.isEmpty) None
     else Some(xs.sum / xs.length)
-  def variance(xs: Seq[Double]): Option[Double] = sys.error("todo")
 
-  def map2[A,B,C](a: Option[A], b: Option[B])(f: (A, B) => C): Option[C] = sys.error("todo")
+  // math.pow(x - m, 2)
+  def variance(xs: Seq[Double]): Option[Double] =
+    mean(xs) flatMap { m => mean(xs map { x => math.pow(x - m, 2) }) }
 
-  def sequence[A](a: List[Option[A]]): Option[List[A]] = sys.error("todo")
+  // with for comprehension
+  def map2[A,B,C](a: Option[A], b: Option[B])(f: (A, B) => C): Option[C] =
+    for {
+      aa <- a
+      bb <- b
+    } yield f(aa, bb)
 
-  def traverse[A, B](a: List[A])(f: A => Option[B]): Option[List[B]] = sys.error("todo")
+  // with pattern matching
+  def pmMap2[A,B,C](a: Option[A], b: Option[B])(f: (A, B) => C): Option[C] =
+    (a, b) match {
+      case (Some(va), Some(vb)) => Some(f(va, vb))
+      case _ => None
+    }
+
+  def sequence[A](a: List[Option[A]]): Option[List[A]] =
+    a match {
+      case head::tail =>
+        head flatMap { v => sequence(tail).map(vt => v :: vt) }
+      case _ => Some(List())
+    }
+
+  // implemented with traverse
+  def tSequence[A](a: List[Option[A]]): Option[List[A]] =
+    traverse(a)(a => a)
+
+  def traverse[A, B](a: List[A])(f: A => Option[B]): Option[List[B]] = //Option[List[B]] =
+    a match {
+      case head::tail =>
+        f(head).flatMap { b =>
+          traverse(tail)(f) map (t => b :: t)
+        }
+      case _ => Some(List())
+    }
+
+  def fTraverse[A, B](a: List[A])(f: A => Option[B]): Option[List[B]] = //Option[List[B]] =
+    a match {
+      case head::tail =>
+        for {
+          b <- f(head)
+          t <- traverse(tail)(f)
+        } yield b :: t
+      case _ => Some(List())
+    }
+
 }
