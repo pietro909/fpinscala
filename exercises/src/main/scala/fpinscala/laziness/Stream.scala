@@ -11,6 +11,39 @@ trait Stream[+A] {
         List()
     }
 
+
+  def scanRight[B](z: => B)(f: (A, => B) => B): Stream[B] = {
+    type S = (B, Stream[A])
+    Stream.unfold[B, S]((z, this))(s => {
+      val (result, current) = s
+      current match {
+        case Cons(h, t) =>
+          val intermediate: B = f(h(), result)
+          Some(intermediate, (intermediate, t()))
+        case Empty =>
+          None
+      }
+    })
+  }
+
+  def tailsWithScanR: Stream[Stream[A]] =
+    scanRight(Stream[A]())((a, b) => b)
+
+  def tails: Stream[Stream[A]] = {
+    type R = Stream[A]
+    type S = (R, R)
+    val tail = Stream.unfold[R, S]((Stream[A](), this))(s => {
+      val (_, current) = s
+      current match {
+        case Cons(h, t) =>
+          Some(t(), (t(), t()))
+        case Empty =>
+          None
+      }
+    })
+    Stream.cons(this, tail)
+  }
+
   def foldRight[B](z: => B)(f: (A, => B) => B): B = // The arrow `=>` in front of the argument type `B` means that the
                                                      // function `f` takes its second argument by name and may choose not to evaluate it.
     this match {
@@ -106,7 +139,14 @@ trait Stream[+A] {
   def flatMap[B](f: A => Stream[B]): Stream[B] =
     foldRight[Stream[B]](Stream[B]())((a, b) => f(a).append(b))
 
-  def startsWith[B](s: Stream[B]): Boolean = sys.error("todo")
+  def startsWith[B](s: Stream[B]): Boolean =
+    zipWith(s)((a, b) => a == b).foldRight(true)(_ && _)
+
+
+
+  def hasSubsequence[A](s: Stream[A]): Boolean =
+    tails exists (_ startsWith s)
+
 }
 case object Empty extends Stream[Nothing]
 case class Cons[+A](h: () => A, t: () => Stream[A]) extends Stream[A]
