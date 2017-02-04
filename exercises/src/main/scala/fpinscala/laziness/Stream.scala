@@ -12,13 +12,15 @@ trait Stream[+A] {
     }
 
 
-  def scanRight[B](z: => B)(f: (A, => B) => B): Stream[B] = {
+  // ok, it's wrong. It's a scanLeft, actually -_-
+  def scanRightWrong[B](z: => B)(f: (A, => B) => B): Stream[B] = {
     type S = (B, Stream[A])
     Stream.unfold[B, S]((z, this))(s => {
       val (result, current) = s
       current match {
         case Cons(h, t) =>
           val intermediate: B = f(h(), result)
+          println(s"${h()}, ${result}")
           Some(intermediate, (intermediate, t()))
         case Empty =>
           None
@@ -26,28 +28,71 @@ trait Stream[+A] {
     })
   }
 
-  def tailsWithScanR: Stream[Stream[A]] =
-    scanRight(Stream[A]())((a, b) => b)
+  def scanRight[B](z: => B)(f: (A, => B) => B): Stream[B] = {
+    type R = Stream[B]
+    foldRight[R](Stream(z))((a, streamB) => {
+      streamB match {
+        case Cons(h, t) =>
+          val result: B = f(a, h())
+          cons(result, streamB)
+        case _ => empty
+      }
+    })
+  }
 
-  def tails: Stream[Stream[A]] = {
+  def tailsWithScanR: Stream[Stream[A]] =
+    scanRight[Stream[A]](empty)((a, b) => cons(a, b))
+
+  /*
+   * Is wrong, issue open on https://github.com/fpinscala/fpinscala/issues/504
+   */
+  def tails: Stream[Stream[A]] =
+    unfold(this) {
+      case Empty => None
+      case s => Some((s, s drop 1))
+    } append Stream(empty)
+
+  def pietroTails: Stream[Stream[A]] = {
+    val tail = Stream.unfold(this) {
+      case Cons(h, t) =>
+        Some(t(), t())
+      case Empty =>
+        None
+    }
+    Stream.cons(this, tail)
+  }
+
+   def verboseTails: Stream[Stream[A]] = {
     type R = Stream[A]
     type S = (R, R)
     val tail = Stream.unfold[R, S]((Stream[A](), this))(s => {
       val (_, current) = s
       current match {
         case Cons(h, t) =>
-          Some(t(), (t(), t()))
+          lazy val tail = t()
+          Some(tail, (tail, tail))
         case Empty =>
           None
       }
     })
     Stream.cons(this, tail)
   }
+  
+  // check answer 7
+  def filter(p: A => Boolean): Stream[A] =
+    foldRight(Stream[A]())((a, b) => {
+      println(s"  f - $a, ${b.toList} => ${p(a)}")
+      //if (p(a)) Cons(() => a, () => b) else b
+      if (p(a)) cons(a, b) else b
+    })
 
-  def foldRight[B](z: => B)(f: (A, => B) => B): B = // The arrow `=>` in front of the argument type `B` means that the
-                                                     // function `f` takes its second argument by name and may choose not to evaluate it.
+  def foldRight[B](z: => B)(f: (A, => B) => B): B =
     this match {
-      case Cons(h,t) => f(h(), t().foldRight(z)(f)) // If `f` doesn't evaluate its second argument, the recursion never occurs.
+      case Cons(h,t) =>
+        println(s"FR - ${h()}, ${t().toList}")
+        val evTail = t().foldRight(z)(f)
+        println(s"FR - evTail => ${evTail}")
+        f(h(), evTail) // If `f` doesn't evaluate its second argument, the recursion never occurs.
       case _ => z
     }
 
@@ -116,7 +161,7 @@ trait Stream[+A] {
     foldRight(true)((a, b) => p(a) && b)
 
   def headOption: Option[A] =
-    foldRight(None: Option[A])((a,_) => Option(a))
+    foldRight(None: Option[A])((a,_) => Some(a))
 
   // 5.7 map, filter, append, flatmap using foldRight. Part of the exercise is
   // writing your own function signatures.
@@ -130,8 +175,20 @@ trait Stream[+A] {
       case Empty => None
     }
 
-  def filter(p: A => Boolean): Stream[A] =
-    foldRight(Stream[A]())((a,b) => if (p(a)) Cons(() => a, () => b.filter(p)) else b.filter(p))
+  def answerFilter(f: A => Boolean): Stream[A] =
+    foldRight(empty[A])((h,t) => {
+      println(s"$h, $t => ${f(h)}")
+      if (f(h)) cons(h, t)
+      else t
+    })
+
+  def correctFilter(p: A => Boolean): Stream[A] =
+  // check answer 7
+    foldRight(empty[A])((a, b) => {
+      println(s"$a, $b => ${p(a)}")
+      if (p(a)) cons(a, b) else b
+    })
+
 
   def append[B >: A](s: => Stream[B]): Stream[B] =
     foldRight(s)((a, b) => cons(a, b))
@@ -186,7 +243,7 @@ object Stream {
 
   def unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A] =
     f(z) match {
-      case Some((value, next)) => cons(value, unfold(next)(f))
+      case Some((h,s)) => cons(h, unfold(s)(f))
       case None => empty
     }
 }

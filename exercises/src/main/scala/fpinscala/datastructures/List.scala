@@ -43,12 +43,6 @@ object List {
       case Cons(h, t) => Cons(h, append(t, a2))
     }
 
-  def foldRight[A, B](as: List[A], z: B)(f: (A, B) => B): B = // Utility functions
-    as match {
-      case Nil => z
-      case Cons(x, xs) => f(x, foldRight(xs, z)(f))
-    }
-
   def sumFR(ns: List[Int]) =
     foldRight(ns, 0)((x, y) => x + y)
 
@@ -91,10 +85,43 @@ object List {
   def length[A](l: List[A]): Int =
     foldRight[A, Int](l, 0)((_, n) => n + 1)
 
+  def foldRight[A, B](as: List[A], z: B)(f: (A, B) => B): B = // Utility functions
+    as match {
+      case Nil => z
+      case Cons(head, tail) => {
+        println(s"FR - ${head}, ${tail}")
+        f(head, foldRight(tail, z)(f))
+      }
+    }
+
   def foldLeft[A, B](l: List[A], z: B)(f: (B, A) => B): B =
     l match {
       case Nil => z
-      case Cons(head, tail) => foldLeft(tail, f(z, head))(f)
+      case Cons(head, tail) => {
+        println(s"FL - ${head}, ${tail}")
+        foldLeft(tail, f(z, head))(f)
+      }
+    }
+
+  def fLfilter[A](l: List[A])(f: A => Boolean): List[A] =
+    foldLeft(l, Nil: List[A])((b, a) => {
+        println(s"  f - $a, $b => ${f(a)}")
+        if (f(a)) Cons(a, b) else b
+    })
+
+  def fRfilter[A](l: List[A])(f: A => Boolean): List[A] =
+    foldRight(l, Nil: List[A])((a, b) => {
+        println(s"  f - $a, $b => ${f(a)}")
+        if (f(a)) Cons(a, b) else b
+    })
+
+  def filter[A](l: List[A])(f: A => Boolean): List[A] =
+    l match {
+      case Cons(head, tail) =>
+        println(s"$head, $tail => ${f(head)}")
+        if (f(head)) Cons(head, filter(tail)(f))
+        else filter(tail)(f)
+      case Nil => Nil
     }
 
   // defined in terms of foldLeft, just swapping the arguments
@@ -142,14 +169,6 @@ object List {
   def map[A, B](l: List[A])(f: A => B): List[B] =
     l match {
       case Cons(head, tail) => Cons(f(head), map(tail)(f))
-      case Nil => Nil
-    }
-
-  def filter[A](l: List[A])(f: A => Boolean): List[A] =
-    l match {
-      case Cons(head, tail) =>
-        if (f(head)) Cons(head, filter(tail)(f))
-        else filter(tail)(f)
       case Nil => Nil
     }
 
