@@ -1,5 +1,7 @@
 package fpinscala.state
 
+import fpinscala.applicative.StateUtil._
+
 
 trait RNG {
   def nextInt: (Int, RNG) // Should generate a random `Int`. We'll later define other functions in terms of `nextInt`.
@@ -177,5 +179,40 @@ object State {
         sa.flatMap(a => acc.map(l => a::l))
     }
 
-  def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = ???
+  def modify[S](f: S => S): State[S, Unit] =
+    for {
+      s <- get
+      _ <- set(f(s))
+    } yield ()
+
+  type R = ((Int, Int), Machine)
+  private def getResult(m: Machine): R = ((m.coins, m.candies), m)
+
+  def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] =
+    State {
+      s =>
+        getResult(
+          inputs.foldLeft[Machine](s) {
+            (machine, input) =>
+              applyInput(input, machine)
+          }
+        )
+    }
+
+  def applyInput(input: Input, machine: Machine): Machine = {
+    val default = machine
+    println(s"${input} from ${machine}")
+    if (machine.candies == 0) default
+    else {
+      input match {
+        // pass-though cases
+        case Coin if (machine.locked && machine.candies == 0) => default
+        case Coin if (!machine.locked) => default
+        case Turn if (machine.locked) => default
+        // effective cases
+        case Coin => Machine(false, machine.candies, machine.coins+1)
+        case Turn => Machine(true, machine.candies-1, machine.coins)
+      }
+    }
+  }
 }
