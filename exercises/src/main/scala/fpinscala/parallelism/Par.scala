@@ -3,6 +3,8 @@ package fpinscala.parallelism
 import java.util.concurrent._
 import language.implicitConversions
 
+import java.util.concurrent.ExecutorService
+
 /*
 Note: this implementation will not prevent repeated evaluation if multiple threads call `get` in parallel.
 We could prevent this using synchronization, but it isn't needed for our purposes here
@@ -63,6 +65,23 @@ object Par {
       // spent evaluating `af`, then subtracts that time from the available time allocated for evaluating `bf`.
     }
 
+  def map3[A,B,C,D](a: Par[A], b: Par[B], c: Par[C])(f: (A,B,C) => D): Par[D] =
+    {
+      def f1(a: A, b: B)(c: C) = f(a,b,c)
+      val f2 = map2(a,b)(f1)
+      val pd: Par[D] = map2(c, f2)((c, f2) => f2(c))
+      pd
+    }
+
+  /*def map4[A,B,C,D,E](pa: Par[A], pb: Par[B], pc: Par[C], pd: Par[D])(f: (A,B,C,D) => E): Par[E] =
+    {
+      def f1(a: A, b: B)(c: C)(d: D) = f(a,b,c,d)
+      val f2: Par[(C => D => E)] = map2(pa,pb)(f1)
+      val f4: Par[(D => E)] = map2(pc, f2)((c, f3) => f3(c))
+      val pd: Par[E] = map2(pd, f4)((d: D, f5: (D => E)) => f5(d))
+      pd
+    }*/
+
   def asyncF[A,B](f: A => B): A => Par[B] =
     (a: A) => lazyUnit(f(a))
 
@@ -99,6 +118,32 @@ object Par {
     pla
   }
 
+
+  def sum(ints: IndexedSeq[Int]): Par[Int] =
+    generalSum(ints, 0)((a,b) => a+b)
+
+  def max(ints: IndexedSeq[Int]): Par[Int] =
+    generalSum(ints, 0)((a,b) => if (a > b) a else b)
+
+  def paragraphLength(paragraphs: List[String]): Par[Int] =
+    map(
+      generalSum[String](paragraphs.toIndexedSeq, "")(_++_)
+    )(_.length)
+
+  def generalSum[A](ints: IndexedSeq[A], neutralElement: A)(f: (A, A) => A): Par[A] =
+    fork {
+      if (ints.size <= 1) {
+        unit(ints.headOption.getOrElse(neutralElement))
+      } else {
+        val (l, r) = ints.splitAt(ints.length / 2)
+        map2(
+          generalSum(l, neutralElement)(f),
+          generalSum(r, neutralElement)(f)
+        )(f(_, _))
+      }
+    }
+
+
   // We define `sequenceBalanced` using `IndexedSeq`, which provides an
   // efficient function for splitting the sequence in half.
   def sequenceBalanced[A](as: IndexedSeq[Par[A]])(f: A => IndexedSeq[A]): Par[IndexedSeq[A]] =
@@ -114,11 +159,6 @@ object Par {
   def sequenceWithBalanced[A](as: List[Par[A]]): Par[List[A]] =
     map(sequenceBalanced(as.toIndexedSeq)(a => Vector(a)))(_.toList)
 
-  def filterWithBalanced[A](as: List[A])(f: A => Boolean): Par[List[A]] =
-    map(sequenceBalanced(as.toIndexedSeq)(a => {
-      if (f(a)) Vector(a)
-      else Vector()
-    }))(_.toList)
 
   /** This is like using Par.run, actually. **/
   def sequenceWrong[A](ps: List[Par[A]]): Par[List[A]] =
